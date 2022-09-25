@@ -15,4 +15,6 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Lint ansible playbook
-      run: pr-check
+      run: |
+        sudo yum install coreutils
+        pr-check
