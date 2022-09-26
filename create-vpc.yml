@@ -1,0 +1,146 @@
+---
+- hosts: localhost  # put localhost.  We are processing against aws
+  connection: local  # put local.  We are processing against aws
+  gather_facts: false  # don't gather facts against localhost
+  vars:
+    aws_access_key: 'AKIA6HDNJLTFTIEXLU5M'
+    aws_secret_key: '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'
+    image_id: 'ami-098d8622135174f89'
+    vpc_title: 'Jenkins'
+    vpc_name: "{{ vpc_title }} VPC"
+    igw_name: "{{ vpc_title }} IGW"
+    subnet_name: "{{ vpc_title }} Subnet"
+    acl_name: "{{ vpc_title }} ACL"
+    security_group_name: "{{ vpc_title }} Security Group"
+    route_table_name: "{{ vpc_title }} route table"
+    vpcCidrBlock: "10.0.0.0/16"
+    subNetCidrBlock: "10.0.1.0/24"
+    port22CidrBlock: "0.0.0.0/0"
+    destinationCidrBlock: "0.0.0.0/0"
+    state: "present"
+    zone: "us-east-1a"
+    region: "us-east-1"
+  tasks:
+    - name: Create a new ec2 VPC
+      # create a vpc with name, cidr block,dns support, and tenancy
+      ec2_vpc_net:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        name: "{{ vpc_name }}"
+        cidr_block: "{{ vpcCidrBlock }}"
+        region: "{{ region }}"
+        # enable dns support
+        dns_support: true
+        # enable dns hostnames
+        dns_hostnames: true
+        tenancy: default
+        state: "{{ state }}"
+      register: ec2_vpc_net_result
+    - name: Create ec2 vpc internet gateway
+      # create an internet gateway for the vpc
+      ec2_vpc_igw:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        vpc_id: "{{ ec2_vpc_net_result.vpc.id }}"
+        region: "{{ region }}"
+        state: "{{ state }}"
+        tags:
+          Name: "{{ igw_name }}"
+      register: igw_result
+    - name: Create ec2 vpc subnet
+      # create the subnet for the vpc with a cidr block
+      ec2_vpc_subnet:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        vpc_id: "{{ ec2_vpc_net_result.vpc.id }}"
+        region: "{{ region }}"
+        az: "{{ zone }}"      # az is the availability zone
+        state: "{{ state }}"
+        cidr: "{{ subNetCidrBlock }}"
+        # enable public ip
+        map_public: true
+        resource_tags:
+          Name: "{{ subnet_name }}"
+      register: subnet_result
+    - name: Create ec2 security group
+      ec2_group:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        vpc_id: "{{ ec2_vpc_net_result.vpc.id }}"
+        region: "{{ region }}"
+        state: "{{ state }}"
+        name: "{{ security_group_name }}"
+        description: " security group name "
+        tags:
+          Name: "{{ security_group_name  }}"
+        rules:
+          - proto: tcp
+            ports:
+              - 22
+            cidr_ip: "{{ port22CidrBlock }}"
+            rule_desc: allow all on port 22
+      register: security_group_results
+    - name: Create ec2 VPC Network access control list
+      # create the access control list with ingress and egress ports
+      ec2_vpc_nacl:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        vpc_id: "{{ ec2_vpc_net_result.vpc.id }}"
+        region: "{{ region }}"
+        state: "{{ state }}"
+        name: "{{ acl_name }}"
+        subnets: ["{{ subnet_result.subnet.id }}"]
+        tags:
+          Name: "{{ acl_name }}"
+          Description: "{{ acl_name }}"
+        # ingress acl rules
+        ingress:
+          # rule no, protocol, allow/deny, cidr, icmp_type, icmp_code, port from, port to
+          # allow ingress port 22
+          - [100, 'tcp', 'allow', "{{ destinationCidrBlock }}", null, null, 22, 22]
+          # allow ingress port 80
+          - [200, 'tcp', 'allow', "{{ destinationCidrBlock }}", null, null, 80, 80]
+          # allow icmp
+          - [300, 'icmp', 'allow', "{{ destinationCidrBlock }}", 0, 8]
+          # allow ingress ephemeral ports
+          - [400, 'tcp', 'allow', "{{ destinationCidrBlock }}", null, null, 1024, 65535]
+        # egress acl rules
+        egress:
+          # rule no, protocol, allow/deny, cidr, icmp_type, icmp_code, port from, port to
+          # allow egres port 22
+          - [100, 'tcp', 'allow', "{{ destinationCidrBlock }}", null, null, 22, 22]
+          # allow egres port 80
+          - [200, 'tcp', 'allow', "{{ destinationCidrBlock }}", null, null, 80, 80]
+          # allow egress ephemeral ports
+          - [300, 'tcp', 'allow', "{{ destinationCidrBlock }}", null, null, 1024, 65535]
+      register: acl_results
+    - name: Create ec2 VPC public subnet route table
+      # create route table and connect subnet to routes
+      ec2_vpc_route_table:
+        aws_access_key: "{{ aws_access_key }}"
+        aws_secret_key: "{{ aws_secret_key }}"
+        vpc_id: "{{ ec2_vpc_net_result.vpc.id }}"
+        region: "{{ region }}"
+        state: "{{ state }}"
+        tags:
+          Name: "{{ route_table_name }}"
+        subnets: ["{{ subnet_result.subnet.id }}"]
+        # create routes
+        routes:
+          - dest: "{{ destinationCidrBlock }}"
+            gateway_id: "{{ igw_result.gateway_id }}"
+      register: public_route_table
+
+    - name: Provision an EC2 instance with a public IP address
+      amazon.aws.ec2_instance:
+        name: AnsibleDemo
+        key_name: ghactions
+        vpc_subnet_id: "{{ subnet_result.subnet.id }}"
+        instance_type: t2.micro
+        security_group: "{{ security_group_name }}"
+        network:
+          assign_public_ip: true
+        image_id: ami-0b203e32cc69876af
+        tags:
+          Environment: Testing
+      register: ec2_result
