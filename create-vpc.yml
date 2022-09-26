@@ -132,7 +132,7 @@
       register: public_route_table
 
     - name: Provision an EC2 instance with a public IP address
-      amazon.aws.ec2_instance:
+      ec2_instance:
         name: AnsibleDemo
         key_name: ghactions
         vpc_subnet_id: "{{ subnet_result.subnet.id }}"
