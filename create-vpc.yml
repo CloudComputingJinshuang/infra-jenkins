@@ -5,13 +5,12 @@
       aws_secret_key: 3DC/Eb7YLjlR+WCeSkFYQ51dHqa0Kyuushk956F8
       region: us-east-1
   tasks:
-
     - name: create VPC
       ec2_vpc_net:
         name: JenkinsVPC
         cidr_block: 10.192.0.0/16
-        dns_support: yes
-        dns_hostnames: yes
+        dns_support: true
+        dns_hostnames: true
         state: present
       register: jenkins_vpc
 
@@ -20,7 +19,7 @@
         vpc_id: "{{ jenkins_vpc.vpc.id }}"
         state: present
         tags:
-            Name: JenkinsInternetGateway
+          Name: JenkinsInternetGateway
       register: jenkins_igw
 
     - name: Create gateway route table
@@ -36,7 +35,7 @@
         state: present
         vpc_id: "{{ jenkins_vpc.vpc.id }}"
         cidr: 10.192.10.0/24
-        map_public: yes
+        map_public: true
         tags:
           Name: JenkinsSubnet
       register: jenkins_subnet
@@ -55,7 +54,7 @@
             gateway_id: "{{ jenkins_igw.gateway_id }}"
       register: jenkins_public_route_table
 
-    - name: ec2 security group
+    - name: Ec2 security group
       amazon.aws.ec2_group:
         name: JenkinsEC2SecurityGroup
         description: an EC2 security group
@@ -76,7 +75,7 @@
       amazon.aws.ec2_instance:
         name: JenkinsEC2
         key_name: jenkins_ec2
-        vpc_subnet_id: "{{jenkins_subnet.subnet.id}}"
+        vpc_subnet_id: "{{ jenkins_subnet.subnet.id }}"
         instance_type: t2.micro
         security_group: JenkinsEC2SecurityGroup
         network:
@@ -112,7 +111,7 @@
           app: jenkins
       register: jenkins_ec2
 
-    - name: allocate a new elastic IP and associate it with an instance
+    - name: Allocate a new elastic IP and associate it with an instance
       community.aws.ec2_eip:
         device_id: "{{ jenkins_ec2.instance_ids[0] }}"
         ip: 3.230.14.141
