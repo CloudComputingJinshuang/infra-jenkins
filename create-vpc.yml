@@ -115,37 +115,3 @@
       community.aws.ec2_eip:
         device_id: "{{ jenkins_ec2.instance_ids[0] }}"
         ip: 3.230.14.141
-
-    # - name: Run shell
-    #   amazon.aws.ec2_instance:
-    #     instance_ids: "{{ jenkins_ec2.instance_ids[0] }}"
-    #     user_data: |
-    #         #!/bin/bash
-    #         apt install ufw -y
-    #         ufw app list
-    #         ufw status
-    #         ufw enable
-    #         ufw allow OpenSSH
-    #         touch /etc/nginx/sites-available/csye6225jinshuang.me
-    #         chmod 755 /etc/nginx/sites-available/csye6225jinshuang.me
-    #         echo "..." >> /etc/nginx/sites-available/csye6225jinshuang.me
-    #         echo "server_name csye6225jinshuang.me www.csye6225jinshuang.me;" >> /etc/nginx/sites-available/csye6225jinshuang.me
-    #         echo "..." >> /etc/nginx/sites-available/csye6225jinshuang.me
-    #         nginx -t
-    #         systemctl reload nginx
-    #         ufw allow 'Nginx Full'
-    #         ufw delete allow 'Nginx HTTP'
-    #         ufw status
-    #         certbot --nginx -d csye6225jinshuang.me -d www.csye6225jinshuang.me
-
-    # - name: Stop the instance by instance id
-    #   amazon.aws.ec2_instance:
-    #     instance_ids: "{{ jenkins_ec2.instance_ids[0] }}"
-    #     state: stopped
-    #     wait: True
-
-    # - name: disassociate an elastic IP from an instance
-    #   community.aws.ec2_eip:
-    #     device_id: "{{ jenkins_ec2.instance_ids[0] }}"
-    #     ip: 3.230.14.141
-    #     state: absent
