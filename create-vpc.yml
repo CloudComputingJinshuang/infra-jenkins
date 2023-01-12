@@ -80,7 +80,7 @@
         security_group: JenkinsEC2SecurityGroup
         network:
           assign_public_ip: true
-        image_id: ami-0649bfd4be5ffd21e
+        image_id: ami-0bed4d757e3969eb4
         state: running
         wait: true
         user_data: |
@@ -114,4 +114,4 @@
     - name: Allocate a new elastic IP and associate it with an instance
       community.aws.ec2_eip:
         device_id: "{{ jenkins_ec2.instance_ids[0] }}"
-        ip: 3.230.14.141
+        ip: 44.199.152.64
