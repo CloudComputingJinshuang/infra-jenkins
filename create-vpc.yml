@@ -1,0 +1,117 @@
+- hosts: localhost
+  module_defaults:
+    group/aws:
+      aws_access_key: AKIA6HDNJLTFTIEXLU5M
+      aws_secret_key: 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
+      region: us-east-1
+  tasks:
+    - name: create VPC
+      ec2_vpc_net:
+        name: JenkinsVPC
+        cidr_block: 10.192.0.0/16
+        dns_support: true
+        dns_hostnames: true
+        state: present
+      register: jenkins_vpc
+
+    - name: Create Internet gateway
+      amazon.aws.ec2_vpc_igw:
+        vpc_id: "{{ jenkins_vpc.vpc.id }}"
+        state: present
+        tags:
+          Name: JenkinsInternetGateway
+      register: jenkins_igw
+
+    - name: Create gateway route table
+      amazon.aws.ec2_vpc_route_table:
+        vpc_id: "{{ jenkins_vpc.vpc.id }}"
+        tags:
+          Name: Jenkins Gateway Route table
+        gateway_id: "{{ jenkins_igw.gateway_id }}"
+      register: jenkins_gateway_route_table
+
+    - name: Create subnet
+      amazon.aws.ec2_vpc_subnet:
+        state: present
+        vpc_id: "{{ jenkins_vpc.vpc.id }}"
+        cidr: 10.192.10.0/24
+        map_public: true
+        tags:
+          Name: JenkinsSubnet
+      register: jenkins_subnet
+
+    - name: Set up public subnet route table
+      amazon.aws.ec2_vpc_route_table:
+        vpc_id: "{{ jenkins_vpc.vpc.id }}"
+        tags:
+          Name: Jenkins Public Route Table
+        subnets:
+          - "{{ jenkins_subnet.subnet.id }}"
+        routes:
+          - dest: 0.0.0.0/0
+            gateway_id: "{{ jenkins_igw.gateway_id }}"
+          - dest: ::/0
+            gateway_id: "{{ jenkins_igw.gateway_id }}"
+      register: jenkins_public_route_table
+
+    - name: Ec2 security group
+      amazon.aws.ec2_group:
+        name: JenkinsEC2SecurityGroup
+        description: an EC2 security group
+        vpc_id: "{{ jenkins_vpc.vpc.id }}"
+        rules:
+          - proto: tcp
+            ports:
+              - 80
+              - 22
+              - 443
+              - 8080
+            cidr_ip: 0.0.0.0/0
+        tags:
+          Name: JenkinsEC2SecurityGroup
+      register: jenkins_security_group
+
+    - name: Provision an EC2 instance with a public IP address
+      amazon.aws.ec2_instance:
+        name: JenkinsEC2
+        key_name: jenkins_ec2
+        vpc_subnet_id: "{{ jenkins_subnet.subnet.id }}"
+        instance_type: t2.micro
+        security_group: JenkinsEC2SecurityGroup
+        network:
+          assign_public_ip: true
+        image_id: ami-0bed4d757e3969eb4
+        state: running
+        wait: true
+        user_data: |
+            #!/bin/bash
+            ufw app list
+            ufw allow OpenSSH
+            ufw enable
+            touch /etc/nginx/conf.d/jenkins.conf
+            tee -a /etc/nginx/conf.d/jenkins.conf<< END
+            server {
+              listen 80;
+              listen [::]:80;
+
+              server_name jenkins.csye6225jinshuang.me;
+
+              location / {
+                  proxy_pass http://localhost:8080/;
+              }
+            }
+            END
+            mv /etc/nginx/conf.d/default.conf /etc/nginx/conf.d/default.conf.disabled
+            nginx -t
+            nginx -s reload
+            certbot --nginx -d jenkins.csye6225jinshuang.me --email jinshuangniu@gmail.com --agree-tos --no-eff-email
+        tags:
+          Environment: Testing
+          Name: JenkinsEC2
+          app: jenkins
+      register: jenkins_ec2
+
+    - name: Allocate a new elastic IP and associate it with an instance
+      community.aws.ec2_eip:
+        device_id: "{{ jenkins_ec2.instance_ids[0] }}"
+        ip: 44.199.152.64
