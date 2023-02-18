@@ -1,8 +1,8 @@
 - hosts: localhost
   module_defaults:
     group/aws:
-      aws_access_key: AKIA6HDNJLTFTIEXLU5M
-      aws_secret_key: 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
+      aws_access_key: null
+      aws_secret_key: null
       region: us-east-1
   tasks:
     - name: create VPC
